@@ -95,7 +95,7 @@ public class TCPClient : MonoBehaviour
 
     #region uwp
     #if !UNITY_EDITOR && !UNITY_ANDROID
-    private async void startUWPSocket()  //maybe add async
+    private async void startUWPSocket()  
     {
         StreamSocket socket = new StreamSocket();
         HostName hostName = new HostName(HOST_NAME);
