@@ -9,7 +9,7 @@ import time
 TCP_IP = '192.168.137.1'
 TCP_PORT = 8080
 BUFFER_SIZE = 1024
-MAX_NO_OF_PLAYERS = 1
+MAX_NO_OF_PLAYERS = 2
 
 clientList= []
 
@@ -32,13 +32,16 @@ while i < 10:
     print (i)
     i = i + 1
 
-conn.send(str("Finished").encode())
+
+for client in clientList:
+    client.send(str("Finished").encode())
 
     
 while 1:
-    data = conn.recv(BUFFER_SIZE)
-    if data:
-        print ("received data:", data.decode())
-        #conn.send(data)  # echo back to client
+    for client in clientList:
+        data = client.recv(BUFFER_SIZE)
+        if data:
+            print ("received data:", data.decode())
+            #conn.send(data)  # echo back to client
 
 conn.close()
