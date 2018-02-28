@@ -1,12 +1,9 @@
 ﻿using UnityEngine;
 using System;
+using Assets.Scripts;
 
-#if UNITY_EDITOR
-    using System.Net;
-    using System.Net.Sockets;
-    using System.Threading;
-#elif UNITY_ANDROID
-    using System.Net;
+
+#if UNITY_EDITOR || UNITY_ANDROID
     using System.Net.Sockets;
     using System.Threading;
 #else
@@ -18,21 +15,27 @@ using System;
 
 public class TCPClient : MonoBehaviour
 {
+    private const String HOST_NAME = "192.168.1.19";
+    private const int PORT = 8080;
 
-    private String HOST_NAME = "192.168.137.1";
-    private int PORT = 8080;
-
-    private GameState _gameState = new GameState();
+    private GameState _gameState;
+    private HUD _HUD;
 
     // Use this for initialization
     void Start()
     {
+        _gameState = new GameState();
+        _HUD = new HUD();
+        
+        //build up a connection to the server, depending from what platform the game is started
         #if UNITY_EDITOR
-            startUnityAndroidSocket();
+            Screen.orientation = ScreenOrientation.Landscape;
+            StartUnityAndroidSocket();
         #elif UNITY_ANDROID
-            startUnityAndroidSocket();
+            Screen.orientation = ScreenOrientation.Landscape;
+            StartUnityAndroidSocket();
         #else
-            startUWPSocket();
+            StartUWPSocket();
         #endif
     }
 
@@ -40,61 +43,59 @@ public class TCPClient : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        //whenever a new GameState is received update the HUD        
         if (_gameState.StateChanged)
         {
-            //do something
+            _HUD.Update(_gameState);
+            _gameState.StateChanged = false;
         }
     }
 
-    #region unity
+    #region unity & andoid
     #if UNITY_EDITOR || UNITY_ANDROID
-    private void startUnityAndroidSocket()
+    private void StartUnityAndroidSocket()
     {
         Thread th = new Thread(HandleConnectionAndNewGameStates);
         th.Start();
     }
 
-    void HandleConnectionAndNewGameStates()
+    private void HandleConnectionAndNewGameStates()
     {
-        Console.WriteLine("Hello User!");
-        Console.WriteLine("Connecting to Server...");
+        //build up connection
         TcpClient tcpClient = new TcpClient(HOST_NAME, PORT);
-        Console.WriteLine("Connected!");
-
         NetworkStream stream = tcpClient.GetStream();
+        tcpClient.ReceiveBufferSize = 5;
 
-        Console.WriteLine("Waiting for player allocation...");
-        byte[] rawResponse = new byte[tcpClient.ReceiveBufferSize];
-        int responseSize = stream.Read(rawResponse, 0, rawResponse.Length);
+        byte[] rawResponse;
+        int responseSize;
 
+        //wait for response to get which player i am
+        rawResponse = new byte[tcpClient.ReceiveBufferSize];
+        responseSize = stream.Read(rawResponse, 0, rawResponse.Length);
         String responseMessage = System.Text.Encoding.ASCII.GetString(rawResponse, 0, responseSize);
-        Console.WriteLine("You are player " + responseMessage + "!\n");
+        int playerNo;
+        if (int.TryParse(responseMessage, out playerNo))
+        {
+            _gameState.PlayerNo = playerNo;
+        }
 
-        Console.WriteLine("waiting for new gamestates");
-        do
+        //wait for new gamestates and on receive update _gameState
+        while(true)
         {
             rawResponse = new byte[tcpClient.ReceiveBufferSize];
             responseSize = stream.Read(rawResponse, 0, rawResponse.Length);
-            Console.WriteLine("new GameState received");
-
-            responseMessage = System.Text.Encoding.ASCII.GetString(rawResponse, 0, responseSize);
-        } while (!responseMessage.Equals("Finished"));
-
-
-
-        Byte[] data = System.Text.Encoding.ASCII.GetBytes("hello server");
-        stream.Write(data, 0, data.Length);
-
+            _gameState.Update(rawResponse);
+        };
 
         stream.Close();
         tcpClient.Close();
-        Console.Read();
+//        Console.Read();
     }
     #endif
     #endregion
 
     #region uwp
-    #if !UNITY_EDITOR && !UNITY_ANDROID
+#if !UNITY_EDITOR && !UNITY_ANDROID
     private async void startUWPSocket()  
     {
         StreamSocket socket = new StreamSocket();
@@ -114,17 +115,20 @@ public class TCPClient : MonoBehaviour
         //byte[] byteMessage = System.Text.Encoding.UTF8.GetBytes("hello from hololens");
         //writer.WriteBytes(byteMessage);
 
-        await reader.LoadAsync(1024);
+        //await reader.LoadAsync(1024);
 
-        String message = reader.ReadString(reader.UnconsumedBufferLength);
-        System.Diagnostics.Debug.WriteLine("you are player " + message);
+        //String message = reader.ReadString(reader.UnconsumedBufferLength);
+        //System.Diagnostics.Debug.WriteLine("you are player " + message);
 
+        byte[] rawGameState;
         while (true)
         {
+            rawGameState = new byte[2];
             await reader.LoadAsync(1024);
-
-            message = reader.ReadString(reader.UnconsumedBufferLength);
-            System.Diagnostics.Debug.WriteLine("new message: " + message);
+            //message = reader.ReadString(reader.UnconsumedBufferLength);
+            reader.ReadBytes(rawGameState);
+            _gameState.Update(rawGameState);
+            //System.Diagnostics.Debug.WriteLine("new message: " + message);
         }
 
     }
@@ -132,7 +136,3 @@ public class TCPClient : MonoBehaviour
     #endregion
 }
 
-public class GameState
-{
-    public Boolean StateChanged { get; set; }
-}

@@ -9,7 +9,7 @@ import time
 TCP_IP = '192.168.137.1'
 TCP_PORT = 8080
 BUFFER_SIZE = 1024
-MAX_NO_OF_PLAYERS = 2
+MAX_NO_OF_PLAYERS = 1
 
 clientList= []
 
